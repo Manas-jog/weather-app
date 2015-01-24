@@ -1,0 +1,314 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+
+<head>
+<script src="http://yui.yahooapis.com/3.13.0/build/yui/yui-min.js"></script>
+<link rel="stylesheet" href="http://yui.yahooapis.com/pure/0.3.0/pure-min.css">
+<link rel="stylesheet" type="text/css" href="http://yui.yahooapis.com/3.13.0/build/datatable/assets/skins/night/datatable.css">
+<script type="text/javascript">
+var d = null;
+var unit = 'f';
+var useLastLocation = null;
+
+YUI().use('event', 'io', 'json-parse', 'datatable', 'node-event-simulate', function(Y) {
+	Y.one("#searchButton").on("click", function (e) {
+		e.preventDefault();
+		var valid = true, type = null;
+
+		if (!useLastLocation) {
+			var value = Y.one("#location").get("value");
+
+			if (!value) {
+				alert("Please enter a location");
+				valid = false;
+			}
+
+			var hasDigits = /^\d+$/;
+			var zipPattern = /^\d{5,5}$/;
+			var cityStateCountryPattern = /^\w[\w\s]*,(?=.*\w)[\w\s]+,?(?=.*\w)[\w\s]+$/;
+
+			if (valid && hasDigits.test(value)) {
+				if (!zipPattern.test(value)) {
+					alert("Invalid zipcode: must be five digits. Example: 90089");
+					valid = false;
+				}
+				else
+					type = "zip";
+			}
+			
+			else if (valid) {
+				if (!cityStateCountryPattern.test(value)) {
+					alert("Invalid location: must include state or country seperated by comma. Example: Los Angeles, CA");
+					valid = false;
+				}
+				else
+					type = "city";	
+			}
+		}
+		else
+			type = "city";
+
+		function complete(id, o, args) {
+			var data = o.responseText;
+			try {
+				Y.one("#weather-table").all('*').remove();
+
+				d = Y.JSON.parse(data);
+
+				if(d.error) {
+					Y.one('#dynamicOutput').setStyle('display', 'none');
+					Y.one('#error-message').setStyle('display', 'block');
+				}
+				else {
+					Y.one("#region").set('textContent', d.location.region);
+					Y.one("#city").set('textContent', d.location.city);
+					Y.one("#country").set('textContent', d.location.country);
+					Y.one("#temperatureText").set('textContent', d.condition.text);
+					Y.one("#temperature").set('textContent', d.condition.temp);
+					Y.one("#high").set('textContent', d.forecast[0].high);
+					Y.one("#low").set('textContent', d.forecast[0].low);
+					Y.one("#feed").set('href', d.link);
+					Y.one("#img").set('src', d.img);
+					Y.all(".units").each( function(node) {
+						node.set('textContent', d.units.temperature);
+					});
+
+					unit = d.units.temperature;
+
+					var tableData = [];
+					for(var i = 0; i < d.forecast.length; i++) {
+						var nextWeather = {
+							Day: d.forecast[i].day,
+							Weather: d.forecast[i].text,
+							High: d.forecast[i].high.concat('\xB0', unit),
+							Low: d.forecast[i].low.concat('\xB0', unit)
+						}
+						tableData.push(nextWeather);
+					}
+
+					var table = new Y.DataTable({
+						columns: ["Day", "Weather", "High", "Low"],
+						data: tableData,
+						caption: "Forecast"
+					});
+
+					table.render("#weather-table");
+					Y.one('#error-message').setStyle('display', 'none');
+					Y.one('#dynamicOutput').setStyle('display', 'block');
+				}
+			}
+			catch(e){
+				alert("Unexpected error occured!");
+			}
+		}
+
+		if (valid) {
+			var location = null;
+			if (useLastLocation)
+				location = (d.location.city).concat(',', d.location.region, ',', d.location.country);
+			else
+				location = encodeURIComponent(Y.one('#location').get('value'));
+			var base_uri = "http://cs-server.usc.edu:24684/examples/servlet/weathersearch";
+			var uri = base_uri.concat('?location=', location, '&type=', type, '&tempUnit=', unit);
+			Y.on('io:complete', complete, Y, []);
+			var request = Y.io(uri);
+			useLastLocation = null;
+		}
+	});
+
+	Y.one("#fb-post").on("click", function(e) {
+		message = null;
+
+		if (Y.one('#postCurrentWeather').get('checked')) {
+			message = {
+				subtitle: ('The current condition for ').concat(d.location.city, ' is ', d.condition.text, '.'),
+				description: ('Temperature is ').concat(d.condition.temp, '\xB0', d.units.temperature),
+				picture: d.img
+			};
+		}
+
+		else
+		{
+			forecastString = "";
+			for(var i = 0; i < d.forecast.length; i++) {
+						forecastString = forecastString.concat (
+										  d.forecast[i].day, ': ', 
+										  d.forecast[i].text, ', ',
+										  d.forecast[i].high, '/',
+										  d.forecast[i].low, '\xB0',
+										  d.units.temperature, '; ');
+					}
+			message = {
+				subtitle: ('Weather Forecast for ').concat(d.location.city),
+				description: (forecastString.slice(0, -1)).concat('.'),
+				picture: 'http://www-scf.usc.edu/~csci571/2013Fall/hw8/weather.jpg'
+			}
+		}
+
+		FB.ui({
+			method: 'feed',
+			name: d.location.city.concat(',', d.location.region, ',', d.location.country),
+		    link: d.feed,
+		    picture: message.picture,
+		    caption: message.subtitle,
+		    description: message.description,
+		    properties: {
+		    	"Look at details": {
+		    		"text": "here",
+		    		"href": d.link
+		    	}
+		    }
+		  },
+		  
+		  function(response) {
+		    if (response && response.post_id) {
+		      alert('Post was published.');
+		    }
+		  });
+
+	});
+
+	Y.one('#change-unit').on('click', function(e){
+		unit = (unit == 'F') ? 'c' : 'f';
+		useLastLocation = d.location;
+		Y.one('#searchButton').simulate('click');
+	});
+});
+
+</script>
+<style type="text/css">
+body
+{
+	color: white;
+	background:url(background.jpg); background-size:100%;
+}
+.content-panel
+{
+	margin: 15px 5%;
+}
+
+a.undecorated
+{
+	color: white;
+	text-decoration: none;
+}
+
+#weather-table .yui3-datatable-caption
+{
+    color: white;
+    font-style: normal;
+    font-size: 18px;
+    text-align: left;
+    padding-bottom: 5px;
+}
+</style>
+</head>
+
+<body class="yui3-skin-sam">
+<div id="fb-root"></div>
+<script>
+  window.fbAsyncInit = function() {
+    // init the FB JS SDK
+    FB.init({
+      appId      : '570441383010983', 
+      channelUrl : '//cs-server.usc.edu:24684/examples/servlets/channel.html',
+      status     : true,
+      xfbml      : true
+    });
+  };
+
+  // Load the SDK asynchronously
+  (function(){
+     if (document.getElementById('facebook-jssdk')) {return;}
+     var firstScriptElement = document.getElementsByTagName('script')[0];
+     var facebookJS = document.createElement('script'); 
+     facebookJS.id = 'facebook-jssdk';
+     facebookJS.src = '//connect.facebook.net/en_US/all.js';
+     firstScriptElement.parentNode.insertBefore(facebookJS, firstScriptElement);
+   }());
+
+</script>
+
+<div class="content-panel">
+
+	<form class="pure-form" style="margin:10px;">
+		<label for="location" style="font-size: 100%;">
+			Location:
+		</label>
+		<input style="margin: 0 10px;" name="location" id="location" type="text" placeholder="Enter city or zip code" class="pure-input-1-4">
+		<button style="padding: 7px 20px;" type="submit" class="pure-button" id="searchButton">Search</button>
+	</form>
+
+  <div id="dynamicOutput" style="display:none;">
+
+  	<div style="margin-left: 10px; margin-top: 40px;">
+		<div style="margin-bottom: 60px;">
+
+			<h1 id="city" style="font-weight: 100; font-size: 48px; margin: 8px 0; margin-bottom: 10px;">
+			</h1>
+			
+			<div style="margin: 0; font-weight: 100;">	
+				<h3><span id="region"></span>, <span id="country"></span></h3>
+			</div>
+
+		</div>
+	</div>
+
+	<div style="margin-left: 10px;">
+		<div style="display:inline-block;">
+			<div>
+				<img id="img" style="height: 50px; width: 50px;">
+				<span id="temperatureText" style="position: relative; font-size: 20px; top: -20px;"></span>
+			</div>
+			<div>
+				<div style="display:inline-block;">
+					<span style="margin: 5px 25px 5px 0px; font-size: 20px;">&uarr;<span id="high"></span>&deg;<span class="units"></span></span>
+				</div>
+				<div style="display:inline-block;">
+					<span style="font-size: 20px;">&darr;<span id="low"></span>&deg;<span class="units"></span></span>
+				</div>
+			</div>
+			<div style="margin-top: 20px;">
+				<h1 id="temperature" style="font-size: 112px; margin: 10px 0; font-weight: 100; display:inline;"></h1>
+				<div style="display: inline-block; font-size: 56px; position:relative; top:-55px;">&deg;<a id="change-unit" class="undecorated" style="text-decoration:underline;" href="Javascript:void(0);"><span class="units"></span></a></div>
+			</div>
+		</div>
+		
+		<div id="weather-table" style="display:inline-block; color:black; margin-left: 80px;">
+		</div>
+	
+		<div style="display:inline-block; margin-left: 80px; position:relative; top:-100px;">
+			<form>
+				<div>
+					<input type="radio" id="postCurrentWeather" name="postWeather" value="current" style="margin-right:10px;">Post Current Weather
+				</div>
+				<div>
+					<input type="radio" id="postForecastWeather" name="postWeather" value="forecast" style="margin-right:10px; margin-top: 10px;" checked>Post Weather Forecast
+				</div>
+				<div>
+					<a id="fb-post" href="Javascript:void(0);"><img src="fb.png" style="margin-top:20px; width:100px; margin-left:auto; margin-right:auto; display:block;"/></a>
+				</div>
+			</form>
+		</div>
+
+		<div style="position:relative; left:900px;">
+			<a id="feed" href="Javascript:void(0);" class="undecorated">
+				<span style="font-size: 12px;">
+					View Full Details on
+				</span>
+				<img src="news-wea.gif" style="width:135px; display:block; margin-top:5px;"/>
+			</a>
+		</div>
+	</div>
+
+  </div>
+  
+  <div id="error-message" style="display:none;">
+  	<h1>Weather information cannot be found!</h1>
+  </div>
+
+</div>
+
+</body>
+
+</html>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Weather App</string>
+    <string name="action_settings">Settings</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="edit_message">Enter a message</string>
+    <string name="button_send">Send</string>
+    <string name="title_activity_main">MainActivity</string>
+    <string name="title_activity_display_message">My Message</string>
+	<string name="action_search">Finder</string>
+	<string name="search_location_placeholder">Zip or Location</string>
+	<string name="search_by_fahrenheit">&#176;F</string>
+	<string name="search_by_celsius">&#176;C</string>
+	<string name="search_button_label">Search</string>
+	<string name="app_id">570441383010983</string>
+	<color name="black">#000000</color>
+	<color name="white">#FFFFFF</color>
+	
+</resources>
